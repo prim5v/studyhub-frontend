@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Search, Paperclip, Image, Smile, Send, Users } from 'lucide-react';
 import { io } from 'socket.io-client';
+import Picker from '@emoji-mart/react';
+import data from '@emoji-mart/data';
 
 const BACKEND_URL = "https://studyhub-8req.onrender.com";
+console.log("🌍 Connecting to backend:", BACKEND_URL);
+
 const socket = io(BACKEND_URL, { transports: ['websocket', 'polling'] });
 
 export const Chat = () => {
@@ -12,6 +16,7 @@ export const Chat = () => {
   const loggedInUserId = storedUser?.user_id;
 
   const [message, setMessage] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeChat, setActiveChat] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -21,19 +26,35 @@ export const Chat = () => {
   const [offset, setOffset] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Join main room & mark online
+  // ✅ Socket connection logs
+  useEffect(() => {
+    socket.on("connect", () => {
+      console.log("✅ Connected to socket server. ID:", socket.id);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("❌ Disconnected from socket server.");
+    });
+
+    return () => {
+      socket.off("connect");
+      socket.off("disconnect");
+    };
+  }, []);
+
+  // ✅ Join personal room
   useEffect(() => {
     if (!loggedInUserId) return;
-    console.log("Joining main room for user:", loggedInUserId);
+    console.log("🟢 Joining personal room for user:", loggedInUserId);
     socket.emit('join_room', { room: loggedInUserId });
     socket.emit('user_online', { user_id: loggedInUserId });
   }, [loggedInUserId]);
 
-  // Listen for user status updates
+  // ✅ User status updates
   useEffect(() => {
     const handleUserStatus = (status) => {
+      console.log("👤 User status update:", status);
       if (activeChat?.type === 'private' && activeChat.receiver_user_id === status.user_id) {
-        console.log("User status updated:", status);
         setActiveUserInfo(prev => ({ ...prev, ...status }));
       }
     };
@@ -41,40 +62,37 @@ export const Chat = () => {
     return () => socket.off('user_status', handleUserStatus);
   }, [activeChat]);
 
-  // Fetch conversations
+  // ✅ Fetch conversations
   useEffect(() => {
     if (!loggedInUserId) return;
 
+    console.log("📤 Fetching conversations for:", loggedInUserId);
     socket.emit('get_private_conversations', { user_id: loggedInUserId });
     socket.emit('get_group_conversations', { user_id: loggedInUserId });
 
     const handlePrivateConvos = (data = []) => {
+      console.log("📥 Private conversations:", data);
       const privateConvos = data.map(c => ({
         ...c,
         type: 'private',
         uniqueId: `private-${c.conversation_id || c.id}`
       }));
-      console.log("Private conversations loaded:", privateConvos);
       setConversations(prev => {
         const groupConvos = prev.filter(c => c.type === 'group');
-        return [...privateConvos, ...groupConvos].sort(
-          (a, b) => new Date(b.lastMessageTime || b.lastMessage_time) - new Date(a.lastMessageTime || a.lastMessage_time)
-        );
+        return [...privateConvos, ...groupConvos];
       });
     };
 
     const handleGroupConvos = (data = []) => {
+      console.log("📥 Group conversations:", data);
       const groupConvos = data.map(c => ({
         ...c,
         type: 'group',
         uniqueId: `group-${c.id}`
       }));
-      console.log("Group conversations loaded:", groupConvos);
       setConversations(prev => {
         const privateConvos = prev.filter(c => c.type === 'private');
-        return [...privateConvos, ...groupConvos].sort(
-          (a, b) => new Date(b.lastMessageTime || b.lastMessage_time) - new Date(a.lastMessageTime || a.lastMessage_time)
-        );
+        return [...privateConvos, ...groupConvos];
       });
     };
 
@@ -87,28 +105,25 @@ export const Chat = () => {
     };
   }, [loggedInUserId]);
 
-  // Listen for new messages
+  // ✅ Listen for new messages
   useEffect(() => {
     const handleNewMessage = (msg) => {
       if (!msg) return;
-      console.log("New message received:", msg);
+      console.log("📩 New message received:", msg);
 
-      setMessages(prev => {
-        if (prev.some(m => m.id === msg.id)) return prev;
-        return [...prev, { ...msg, time: msg.created_at || new Date().toLocaleTimeString() }]
-          .sort((a, b) => new Date(a.time) - new Date(b.time));
-      });
+      setMessages(prev => [...prev, { ...msg, time: msg.created_at || new Date().toLocaleTimeString() }]);
 
-      // Update unread counts if not active chat
-      const isNotActiveChat =
+      // unread count if not active
+      const isNotActive =
         !activeChat ||
         !(
           (msg.sender_id === activeChat.receiver_user_id || msg.receiver_id === activeChat.receiver_user_id) ||
           msg.group_id === activeChat.id
         );
 
-      if (isNotActiveChat) {
-        const key = msg.group_id === 'UNI' ? `private-${msg.sender_id}` : `group-${msg.group_id}`;
+      if (isNotActive) {
+        const key = msg.group_id ? `group-${msg.group_id}` : `private-${msg.sender_id}`;
+        console.log("🔔 Unread message in conversation:", key);
         setUnreadCounts(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
         setHighlighted(key);
         setTimeout(() => setHighlighted(null), 1000);
@@ -119,9 +134,11 @@ export const Chat = () => {
     return () => socket.off('new_message', handleNewMessage);
   }, [activeChat]);
 
-  // Fetch messages when active chat changes
+  // ✅ Load messages when chat changes
   useEffect(() => {
     if (!activeChat) return;
+
+    console.log("💬 Switching to conversation:", activeChat);
 
     setOffset(0);
     setMessages([]);
@@ -132,33 +149,22 @@ export const Chat = () => {
         ? { sender_id: loggedInUserId, receiver_id: activeChat.receiver_user_id, limit: 20, offset: 0 }
         : { group_id: activeChat.id, limit: 20, offset: 0 };
 
-    console.log("Fetching messages for active chat:", payload);
+    console.log("📤 Fetching messages:", event, payload);
     socket.emit(event, payload);
 
     const msgEvent = activeChat.type === 'private' ? 'private_messages' : 'group_messages';
     const handleMessages = (msgs = []) => {
-      const sorted = msgs.map(m => ({ ...m, time: m.created_at })).sort((a, b) => new Date(a.time) - new Date(b.time));
-      setMessages(sorted);
+      console.log("📥 Messages received:", msgs);
+      setMessages(msgs.map(m => ({ ...m, time: m.created_at })));
       setUnreadCounts(prev => ({ ...prev, [activeChat.uniqueId]: 0 }));
       setLoadingMore(false);
-      console.log("Messages loaded:", sorted);
     };
     socket.on(msgEvent, handleMessages);
 
-    if (activeChat.type === 'private') {
-      socket.emit('get_user_info', { user_id: activeChat.receiver_user_id });
-      socket.on('user_info', setActiveUserInfo);
-    } else {
-      setActiveUserInfo(null);
-    }
+    return () => socket.off(msgEvent, handleMessages);
+  }, [activeChat, loggedInUserId]);
 
-    return () => {
-      socket.off(msgEvent, handleMessages);
-      socket.off('user_info', setActiveUserInfo);
-    };
-  }, [activeChat, loggedInUserId, offset]);
-
-  // Submit message
+  // ✅ Send message
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!message.trim() || !activeChat) return;
@@ -173,21 +179,26 @@ export const Chat = () => {
     const msgData = {
       sender_id: loggedInUserId,
       receiver_id: receiverId,
-      group_id: activeChat.type === 'group' ? activeChat.id : 'UNI',
+      group_id: activeChat.type === 'group' ? activeChat.id : null,
       message
     };
-    console.log("Sending message:", msgData);
-    socket.emit('send_message', msgData);
+
+    console.log("📤 Sending message:", msgData);
+    socket.emit('send_message', msgData, (ack) => {
+      console.log("✅ ACK from backend:", ack);
+    });
+
     setMessage('');
+    setShowEmojiPicker(false);
   };
 
   const handleSelectConversation = (conv) => {
+    console.log("🟢 Selected conversation:", conv);
     const receiver_user_id = conv.type === 'private'
       ? conv.user1_id === loggedInUserId ? conv.user2_id : conv.user1_id
       : null;
     setActiveChat({ ...conv, receiver_user_id });
     setUnreadCounts(prev => ({ ...prev, [conv.uniqueId]: 0 }));
-    console.log("Active chat selected:", conv);
   };
 
   const handleScroll = (e) => {
@@ -202,12 +213,10 @@ export const Chat = () => {
           ? { sender_id: loggedInUserId, receiver_id: activeChat.receiver_user_id, limit: 20, offset: newOffset }
           : { group_id: activeChat.id, limit: 20, offset: newOffset };
 
-      console.log("Fetching older messages:", payload);
+      console.log("📤 Loading more messages:", event, payload);
       socket.emit(event, payload);
     }
   };
-
-  const formatLastSeen = (timestamp) => timestamp ? new Date(timestamp).toLocaleString() : '';
 
   return (
     <div className="flex h-[calc(100vh-120px)] bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -259,24 +268,6 @@ export const Chat = () => {
       <div className="flex-1 flex flex-col">
         {activeChat ? (
           <>
-            {/* Header */}
-            <div className="flex items-center p-4 border-b border-gray-200">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white">
-                {activeChat.type === 'group' ? <Users className="h-5 w-5" /> : activeChat.name?.charAt(0)}
-              </div>
-              <div className="ml-3">
-                <h3 className="font-medium text-gray-900">{activeChat.name}</h3>
-                {activeChat.type === 'private' && activeUserInfo && (
-                  <p className="text-xs text-gray-500">
-                    {activeUserInfo.is_online ? 'Online' : `Last seen: ${formatLastSeen(activeUserInfo.last_seen)}`}
-                  </p>
-                )}
-                {activeChat.type === 'group' && (
-                  <p className="text-xs text-gray-500">{activeChat.memberCount || 0} members</p>
-                )}
-              </div>
-            </div>
-
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4" onScroll={handleScroll}>
               {loadingMore && <div className="text-center text-gray-400 text-sm">Loading older messages...</div>}
@@ -303,7 +294,7 @@ export const Chat = () => {
             </div>
 
             {/* Input */}
-            <div className="border-t border-gray-200 p-4">
+            <div className="border-t border-gray-200 p-4 relative">
               <form onSubmit={handleSubmit} className="flex items-center">
                 <button type="button" className="p-2 rounded-full text-gray-500 hover:bg-gray-100">
                   <Paperclip className="h-5 w-5" />
@@ -320,6 +311,7 @@ export const Chat = () => {
                   />
                   <button
                     type="button"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   >
                     <Smile className="h-5 w-5" />
@@ -337,6 +329,14 @@ export const Chat = () => {
                   <Send className="h-5 w-5" />
                 </button>
               </form>
+              {showEmojiPicker && (
+                <div className="absolute bottom-16 right-12 z-50">
+                  <Picker data={data} onEmojiSelect={(emoji) => {
+                    console.log("😀 Emoji selected:", emoji.native);
+                    setMessage((prev) => prev + emoji.native);
+                  }} />
+                </div>
+              )}
             </div>
           </>
         ) : (

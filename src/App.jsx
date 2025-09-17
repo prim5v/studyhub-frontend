@@ -20,6 +20,7 @@ import { MyNotesPage } from "./pages/MyNotesPage";
 import { SearchPage } from "./pages/SearchPage";
 import { Grouping } from "./pages/Grouping";
 import { IntroModal } from "./components/IntroModal";
+import PublicChat from "./pages/PublicChat";
 
 // ---------------- Landing Page Wrapper ----------------
 function LandingPageWrapper() {
@@ -114,6 +115,7 @@ export function App() {
         <Route path="/notes" element={<MainLayout><MyNotesPage /></MainLayout>} />
         <Route path="/search" element={<MainLayout><SearchPage /></MainLayout>} />
         <Route path="/groups" element={<MainLayout><Grouping /></MainLayout>} />
+        <Route path="/public-chat" element={<MainLayout><PublicChat /></MainLayout>} />
 
         {/* Resource Page */}
         <Route path="/resource/:id" element={<MainLayout><ResourcePage /></MainLayout>} />
