@@ -13,8 +13,10 @@ const Sidebar = () => {
   const navItems = [
     { icon: Home, label: "Home", path: "/home" },
     { icon: FileText, label: "My Notes", path: "/notes" },
-    { icon: Users, label: "Study Groups", path: "/groups" },
-    { icon: MessageSquare, label: "Messages", path: "/messages" },
+    // { icon: Users, label: "Study Groups", path: "/groups" },
+    // { icon: MessageSquare, label: "Messages", path: "/messages" },
+    { icon: MessageSquare, label: "Public Chat", path: "/public-chat" },
+
     // { icon: Heart, label: "Favorites", path: "/favorites" },
   ];
 
