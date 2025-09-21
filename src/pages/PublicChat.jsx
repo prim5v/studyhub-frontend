@@ -65,7 +65,21 @@ const PublicChat = () => {
 
     socket.on("new_public_message", (msg) => {
       console.log("📩 Received:", msg);
-      setMessages((prev) => [...prev, msg]);
+
+      // ✅ Avoid duplicate (ignore if we already optimistically added this msg)
+      setMessages((prev) => {
+        const isDuplicate = prev.some(
+          (m) =>
+            m.sender_id === msg.sender_id &&
+            m.message === msg.message &&
+            Math.abs(new Date(m.created_at) - new Date(msg.created_at)) < 2000 // within 2s
+        );
+        if (isDuplicate) {
+          console.log("⚠️ Ignored duplicate message:", msg);
+          return prev;
+        }
+        return [...prev, msg];
+      });
     });
 
     return () => {
@@ -98,7 +112,7 @@ const PublicChat = () => {
       message: msgData.message,
     });
 
-    // Optimistic render
+    // ✅ Optimistic render
     setMessages((prev) => [...prev, msgData]);
 
     setNewMessage("");
