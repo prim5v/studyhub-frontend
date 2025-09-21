@@ -5,7 +5,6 @@ import data from "@emoji-mart/data";
 import { Send, Smile } from "lucide-react";
 
 const BACKEND_URL = "https://studyhub-8req.onrender.com";
-const socket = io(BACKEND_URL, { transports: ["websocket", "polling"] });
 
 const PublicChat = () => {
   const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -16,6 +15,7 @@ const PublicChat = () => {
   const [newMessage, setNewMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef(null);
+  const socketRef = useRef(null);
 
   // Scroll to bottom when messages update
   const scrollToBottom = () => {
@@ -34,16 +34,29 @@ const PublicChat = () => {
       .catch((err) => console.error("❌ Error fetching messages:", err));
   }, []);
 
-  // Setup socket listeners
+  // Setup socket connection + listeners
   useEffect(() => {
+    const socket = io(BACKEND_URL, {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
+    });
+    socketRef.current = socket;
+
     socket.on("connect", () => {
-      console.log("🔌 Connected to backend with id:", socket.id);
+      console.log("🔌 Connected with id:", socket.id);
       socket.emit("join_public_room");
-      console.log("🚪 Requested to join PUBLIC room");
+      console.log("🚪 Joined PUBLIC room");
     });
 
     socket.on("disconnect", (reason) => {
-      console.warn("⚠️ Disconnected from backend:", reason);
+      console.warn("⚠️ Disconnected:", reason);
+    });
+
+    socket.on("reconnect", (attempt) => {
+      console.log(`🔄 Reconnected after ${attempt} attempts`);
+      socket.emit("join_public_room"); // 👈 rejoin on reconnect
     });
 
     socket.on("connect_error", (err) => {
@@ -51,15 +64,12 @@ const PublicChat = () => {
     });
 
     socket.on("new_public_message", (msg) => {
-      console.log("📩 Received from backend:", msg);
+      console.log("📩 Received:", msg);
       setMessages((prev) => [...prev, msg]);
     });
 
     return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("connect_error");
-      socket.off("new_public_message");
+      socket.disconnect();
     };
   }, []);
 
@@ -77,18 +87,18 @@ const PublicChat = () => {
       sender_id: userId,
       sender_name: userName,
       message: newMessage.trim(),
-      created_at: new Date().toISOString(), // temp timestamp for local display
+      created_at: new Date().toISOString(),
     };
 
-    console.log("📤 Sending send_public_message:", msgData);
+    console.log("📤 Sending:", msgData);
 
-    // ✅ Emit to backend (only send sender_id + message, backend fills in name/timestamp)
-    socket.emit("send_public_message", {
+    // Emit to backend
+    socketRef.current.emit("send_public_message", {
       sender_id: userId,
       message: msgData.message,
     });
 
-    // ✅ Optimistic render: show message immediately
+    // Optimistic render
     setMessages((prev) => [...prev, msgData]);
 
     setNewMessage("");
@@ -122,10 +132,7 @@ const PublicChat = () => {
       <div className="p-4 border-t bg-white flex items-center space-x-2 relative">
         <button
           type="button"
-          onClick={() => {
-            setShowEmojiPicker(!showEmojiPicker);
-            console.log("😀 Emoji picker toggled:", !showEmojiPicker);
-          }}
+          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
           className="p-2 rounded-full hover:bg-gray-200"
         >
           <Smile className="h-5 w-5" />
@@ -135,10 +142,7 @@ const PublicChat = () => {
           type="text"
           placeholder="Type a message..."
           value={newMessage}
-          onChange={(e) => {
-            console.log("⌨️ Input changed:", e.target.value);
-            setNewMessage(e.target.value);
-          }}
+          onChange={(e) => setNewMessage(e.target.value)}
           className="flex-1 border rounded-full px-4 py-2 focus:outline-none"
         />
 
@@ -155,7 +159,6 @@ const PublicChat = () => {
             <Picker
               data={data}
               onEmojiSelect={(emoji) => {
-                console.log("😀 Emoji selected:", emoji.native);
                 setNewMessage((prev) => prev + emoji.native);
               }}
             />
