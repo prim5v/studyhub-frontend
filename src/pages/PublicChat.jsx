@@ -28,7 +28,7 @@ const PublicChat = () => {
     fetch(`${BACKEND_URL}/api/public-messages`)
       .then((res) => res.json())
       .then((data) => {
-        console.log("✅ Initial messages:", data);
+        console.log("✅ Initial messages loaded:", data);
         setMessages(data);
       })
       .catch((err) => console.error("❌ Error fetching messages:", err));
@@ -36,11 +36,10 @@ const PublicChat = () => {
 
   // Setup socket listeners
   useEffect(() => {
-    // Log connection events
     socket.on("connect", () => {
       console.log("🔌 Connected to backend with id:", socket.id);
-      // If you want to join the public room:
       socket.emit("join_public_room");
+      console.log("🚪 Requested to join PUBLIC room");
     });
 
     socket.on("disconnect", (reason) => {
@@ -51,7 +50,6 @@ const PublicChat = () => {
       console.error("❌ Socket connection error:", err.message);
     });
 
-    // Listen for messages
     socket.on("new_public_message", (msg) => {
       console.log("📩 Received from backend:", msg);
       setMessages((prev) => [...prev, msg]);
@@ -70,15 +68,28 @@ const PublicChat = () => {
   // Send a message
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim()) {
+      console.warn("⚠️ Tried to send empty message.");
+      return;
+    }
 
     const msgData = {
       sender_id: userId,
+      sender_name: userName,
       message: newMessage.trim(),
+      created_at: new Date().toISOString(), // temp timestamp for local display
     };
 
-    console.log("📤 Sending to backend:", msgData);
-    socket.emit("send_public_message", msgData);
+    console.log("📤 Sending send_public_message:", msgData);
+
+    // ✅ Emit to backend (only send sender_id + message, backend fills in name/timestamp)
+    socket.emit("send_public_message", {
+      sender_id: userId,
+      message: msgData.message,
+    });
+
+    // ✅ Optimistic render: show message immediately
+    setMessages((prev) => [...prev, msgData]);
 
     setNewMessage("");
     setShowEmojiPicker(false);
@@ -111,7 +122,10 @@ const PublicChat = () => {
       <div className="p-4 border-t bg-white flex items-center space-x-2 relative">
         <button
           type="button"
-          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          onClick={() => {
+            setShowEmojiPicker(!showEmojiPicker);
+            console.log("😀 Emoji picker toggled:", !showEmojiPicker);
+          }}
           className="p-2 rounded-full hover:bg-gray-200"
         >
           <Smile className="h-5 w-5" />
@@ -121,7 +135,10 @@ const PublicChat = () => {
           type="text"
           placeholder="Type a message..."
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={(e) => {
+            console.log("⌨️ Input changed:", e.target.value);
+            setNewMessage(e.target.value);
+          }}
           className="flex-1 border rounded-full px-4 py-2 focus:outline-none"
         />
 
@@ -137,9 +154,10 @@ const PublicChat = () => {
           <div className="absolute bottom-16 left-4 z-50">
             <Picker
               data={data}
-              onEmojiSelect={(emoji) =>
-                setNewMessage((prev) => prev + emoji.native)
-              }
+              onEmojiSelect={(emoji) => {
+                console.log("😀 Emoji selected:", emoji.native);
+                setNewMessage((prev) => prev + emoji.native);
+              }}
             />
           </div>
         )}
