@@ -14,30 +14,25 @@ const PublicChat = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
 
-  // Scroll to bottom when messages update
+  // Scroll to bottom
   const scrollToBottom = () => {
-    console.log("🔽 Scrolling to bottom...");
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Fetch initial messages from backend
+  // Fetch initial messages
   useEffect(() => {
-    console.log("🌐 Fetching initial messages...");
     fetch(`${BACKEND_URL}/api/public-messages`)
       .then((res) => res.json())
-      .then((data) => {
-        console.log("✅ Initial messages loaded:", data);
-        setMessages(data);
-      })
-      .catch((err) => console.error("❌ Error fetching messages:", err));
+      .then((data) => setMessages(data))
+      .catch(console.error);
   }, []);
 
-  // Setup socket connection + listeners
+  // Setup socket
   useEffect(() => {
-    console.log("🔌 Connecting socket...");
     const socket = io(BACKEND_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
@@ -49,43 +44,40 @@ const PublicChat = () => {
     socket.on("connect", () => {
       console.log("✅ Connected with id:", socket.id);
       socket.emit("join_public_room");
-      console.log("🚪 Joined PUBLIC room");
     });
 
-    socket.on("disconnect", (reason) => {
-      console.warn("⚠️ Disconnected:", reason);
-    });
-
-    socket.on("reconnect", (attempt) => {
-      console.log(`🔄 Reconnected after ${attempt} attempts`);
-      socket.emit("join_public_room");
-    });
-
-    socket.on("connect_error", (err) => {
-      console.error("❌ Socket connection error:", err.message);
-    });
-
+    // Incoming messages
     socket.on("new_public_message", (msg) => {
-      console.log("📩 Received message from backend:", msg);
-
       setMessages((prev) => [...prev, msg]);
+
+      // If the message is not from logged-in user → play pop + update badge
+      if (msg.sender_id !== userId) {
+        const audio = new Audio("/pop.wav"); // notification sound
+        audio.play().catch(() => {});
+        setUnreadCount((prev) => prev + 1);
+      } else {
+        // Message sent by you → play send sound
+        const audio = new Audio("/sent.wav"); // or another sound
+        audio.play().catch(() => {});
+      }
     });
 
     return () => {
-      console.log("🛑 Disconnecting socket...");
       socket.disconnect();
     };
-  }, []);
+  }, [userId]);
 
   useEffect(scrollToBottom, [messages]);
 
-  // Send a message (no optimistic render)
+  // Reset unread count when user views public chat
+  useEffect(() => {
+    setUnreadCount(0);
+  }, [messages]);
+
+  // Send a message
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) {
-      console.warn("⚠️ Tried to send empty message.");
-      return;
-    }
+    if (!newMessage.trim()) return;
 
     const msgData = {
       sender_id: userId,
@@ -93,8 +85,6 @@ const PublicChat = () => {
       message: newMessage.trim(),
       created_at: new Date().toISOString(),
     };
-
-    console.log("📤 Sending message to backend:", msgData);
 
     socketRef.current.emit("send_public_message", {
       sender_id: userId,
@@ -128,14 +118,11 @@ const PublicChat = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input & Emoji Picker */}
+      {/* Input & Emoji */}
       <div className="p-4 border-t bg-white flex items-center space-x-2 relative">
         <button
           type="button"
-          onClick={() => {
-            console.log("😀 Emoji picker toggled:", !showEmojiPicker);
-            setShowEmojiPicker(!showEmojiPicker);
-          }}
+          onClick={() => setShowEmojiPicker((prev) => !prev)}
           className="p-2 rounded-full hover:bg-gray-200"
         >
           <Smile className="h-5 w-5" />
@@ -145,10 +132,7 @@ const PublicChat = () => {
           type="text"
           placeholder="Type a message..."
           value={newMessage}
-          onChange={(e) => {
-            console.log("⌨️ Typing message:", e.target.value);
-            setNewMessage(e.target.value);
-          }}
+          onChange={(e) => setNewMessage(e.target.value)}
           className="flex-1 border rounded-full px-4 py-2 focus:outline-none"
         />
 
@@ -164,14 +148,18 @@ const PublicChat = () => {
           <div className="absolute bottom-16 left-4 z-50">
             <Picker
               data={data}
-              onEmojiSelect={(emoji) => {
-                console.log("🎉 Emoji selected:", emoji.native);
-                setNewMessage((prev) => prev + emoji.native);
-              }}
+              onEmojiSelect={(emoji) => setNewMessage((prev) => prev + emoji.native)}
             />
           </div>
         )}
       </div>
+
+      {/* 🔔 Unread badge */}
+      {unreadCount > 0 && (
+        <div className="fixed top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full animate-bounce shadow-lg">
+          {unreadCount} new message{unreadCount > 1 ? "s" : ""}
+        </div>
+      )}
     </div>
   );
 };
