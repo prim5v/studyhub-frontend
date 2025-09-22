@@ -1,44 +1,36 @@
 // src/components/Sidebar.jsx
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, FileText, Users, MessageSquare, Heart, Plus } from "lucide-react";
+import { Home, FileText, MessageSquare, Plus } from "lucide-react";
 import socket from "../socket";
 
 const Sidebar = () => {
   const location = useLocation();
   const [groups, setGroups] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [bounceBadge, setBounceBadge] = useState(false);
+
+  const storedUserId = parseInt(localStorage.getItem("user_id"), 10);
 
   const isActive = (path) => location.pathname === path;
 
   const navItems = [
     { icon: Home, label: "Home", path: "/home" },
     { icon: FileText, label: "My Notes", path: "/notes" },
-    // { icon: Users, label: "Study Groups", path: "/groups" },
-    // { icon: MessageSquare, label: "Messages", path: "/messages" },
     { icon: MessageSquare, label: "Public Chat", path: "/public-chat" },
-
-    // { icon: Heart, label: "Favorites", path: "/favorites" },
   ];
 
+  // Load groups
   useEffect(() => {
-    const storedUserId = localStorage.getItem("user_id");
-    if (!storedUserId) return; // user not logged in
-    const userId = parseInt(storedUserId, 10);
+    if (!storedUserId) return;
 
-    socket.emit("get_my_groupe_list", { user_id: userId });
+    socket.emit("get_my_groupe_list", { user_id: storedUserId });
 
     socket.on("my_groups_response", (data) => {
-      console.log("Groups received:", data);
-
-      // Normalize the data to always be an array
       let groupArray = [];
-      if (Array.isArray(data)) {
-        groupArray = data;
-      } else if (data && Array.isArray(data.groups)) {
-        groupArray = data.groups;
-      }
+      if (Array.isArray(data)) groupArray = data;
+      else if (data && Array.isArray(data.groups)) groupArray = data.groups;
 
-      // Map to expected keys
       const normalized = groupArray.map((g) => ({
         id: g.group_id || g.id || g.ID,
         name: g.group_name || g.name || "Unnamed Group",
@@ -50,7 +42,46 @@ const Sidebar = () => {
     return () => {
       socket.off("my_groups_response");
     };
+  }, [storedUserId]);
+
+  // Join PUBLIC room
+  useEffect(() => {
+    socket.emit("join_public_room");
+    return () => {
+      socket.emit("leave_public_room");
+    };
   }, []);
+
+  // Listen for new public messages
+  useEffect(() => {
+    const handleNewPublicMessage = (msg) => {
+      // Ignore messages sent by yourself
+      if (msg.sender_id === storedUserId) return;
+
+      // play pop sound
+      const audio = new Audio("/pop.wav");
+      audio.play().catch(() => {});
+
+      if (location.pathname !== "/public-chat") {
+        setUnreadCount((prev) => prev + 1);
+
+        // trigger badge bounce
+        setBounceBadge(true);
+        setTimeout(() => setBounceBadge(false), 600);
+      }
+    };
+
+    socket.on("new_public_message", handleNewPublicMessage);
+
+    return () => {
+      socket.off("new_public_message", handleNewPublicMessage);
+    };
+  }, [location.pathname, storedUserId]);
+
+  // Reset count when visiting Public Chat
+  useEffect(() => {
+    if (location.pathname === "/public-chat") setUnreadCount(0);
+  }, [location.pathname]);
 
   return (
     <aside className="hidden md:flex w-64 border-r border-gray-200 bg-white p-4 flex-col">
@@ -70,7 +101,7 @@ const Sidebar = () => {
             <li key={index}>
               <Link
                 to={item.path}
-                className={`flex items-center px-4 py-3 rounded-lg ${
+                className={`relative flex items-center px-4 py-3 rounded-lg ${
                   isActive(item.path)
                     ? "bg-blue-50 text-blue-600"
                     : "text-gray-700 hover:bg-gray-100"
@@ -82,6 +113,17 @@ const Sidebar = () => {
                   }`}
                 />
                 <span className="ml-3 font-medium">{item.label}</span>
+
+                {/* 🔴 Badge */}
+                {item.path === "/public-chat" && unreadCount > 0 && (
+                  <span
+                    className={`absolute right-3 top-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full transition-transform ${
+                      bounceBadge ? "animate-bounce" : ""
+                    }`}
+                  >
+                    {unreadCount}
+                  </span>
+                )}
               </Link>
             </li>
           ))}

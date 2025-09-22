@@ -1,55 +1,50 @@
 // src/pages/Home.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import { ResourceCard } from "../components/ResourceCard";
-import { StudyGroupCard } from "../components/StudyGroupCard";
 import { UserCard } from "../components/UserCard";
 import { IntroModal } from "../components/IntroModal";
 import { useNavigate } from "react-router-dom";
+import { BookOpen, Users } from "lucide-react";
 
-// Connect socket
-const socket = io("https://studyhub-8req.onrender.com");
+// ------------------ Socket Connection ------------------
+const socket = io("https://studyhub-8req.onrender.com", {
+  transports: ["websocket"],
+});
 
 export const Home = () => {
   const navigate = useNavigate();
 
   const [trendingResources, setTrendingResources] = useState([]);
-  const [suggestedGroups, setSuggestedGroups] = useState([]);
   const [suggestedStudents, setSuggestedStudents] = useState([]);
-  const [showIntro, setShowIntro] = useState(false); // <-- for IntroModal
+  const [showIntro, setShowIntro] = useState(false);
+
+  const [loadingResources, setLoadingResources] = useState(true);
+  const [loadingStudents, setLoadingStudents] = useState(true);
 
   const storedUser = JSON.parse(localStorage.getItem("user")) || null;
   const user_id = storedUser?.user_id || null;
 
-  const resourceCardRef = useRef(null);
-  const groupCardRef = useRef(null);
-  const studentCardRef = useRef(null);
+  // Fixed heights to fit 3 cards vertically
+  const resourceMaxHeight = "900px";
+  const studentMaxHeight = "540px";
 
-  const [resourceMaxHeight, setResourceMaxHeight] = useState("300px");
-  const [groupMaxHeight, setGroupMaxHeight] = useState("250px");
-  const [studentMaxHeight, setStudentMaxHeight] = useState("180px");
-
-  // ------------------ Check introPlayed ------------------
+  // ------------------ Intro Modal ------------------
   useEffect(() => {
     if (!user_id) return;
-
     const introPlayed = localStorage.getItem("introPlayed");
-    console.log("introPlayed in localStorage:", introPlayed);
-    if (!introPlayed) {
-      setShowIntro(true); // show intro modal on first login
-    }
+    if (!introPlayed) setShowIntro(true);
   }, [user_id]);
 
   // ------------------ Fetch Data ------------------
   useEffect(() => {
     if (!user_id) return;
 
-    console.log("Home mounted, fetching data for user_id:", user_id);
+    setLoadingResources(true);
+    setLoadingStudents(true);
 
-    // ------------------ Trending Resources ------------------
     socket.emit("trending_resources", { user_id });
     socket.on("trending_resources_response", (resources) => {
-      console.log("Received trending_resources_response:", resources);
       const formatted = (resources || []).map((r) => ({
         id: r.resource_id,
         title: r.resource_name,
@@ -64,38 +59,11 @@ export const Home = () => {
         resourceUrl: r.resource_url || null,
       }));
       setTrendingResources(formatted);
-
-      setTimeout(() => {
-        if (resourceCardRef.current) {
-          setResourceMaxHeight(resourceCardRef.current.offsetHeight + 20 + "px");
-        }
-      }, 100);
+      setLoadingResources(false);
     });
 
-    // ------------------ Suggested Groups ------------------
-    socket.emit("suggest_groups", { user_id });
-    socket.on("suggest_groups_response", (data) => {
-      console.log("Received suggest_groups_response:", data);
-      const formatted = (data.groups || []).map((g) => ({
-        id: g.group_id,
-        name: g.group_name,
-        subject: g.course_name || "",
-        memberCount: g.total_members || 0,
-        activeNow: g.online_members || 0,
-      }));
-      setSuggestedGroups(formatted);
-
-      setTimeout(() => {
-        if (groupCardRef.current) {
-          setGroupMaxHeight(groupCardRef.current.offsetHeight + 20 + "px");
-        }
-      }, 100);
-    });
-
-    // ------------------ Suggested Students ------------------
     socket.emit("suggest_students", { user_id });
     socket.on("suggest_students_response", (data) => {
-      console.log("Received suggest_students_response:", data);
       const formatted = (data.students || []).map((s) => ({
         id: s.id,
         user_id: s.user_id,
@@ -109,15 +77,9 @@ export const Home = () => {
         followers_count: s.followers_count || 0,
       }));
       setSuggestedStudents(formatted);
-
-      setTimeout(() => {
-        if (studentCardRef.current) {
-          setStudentMaxHeight(studentCardRef.current.offsetHeight + 20 + "px");
-        }
-      }, 100);
+      setLoadingStudents(false);
     });
 
-    // ------------------ Real-time Updates ------------------
     socket.on("like_response", ({ resource_id, like_count, has_liked }) => {
       setTrendingResources((prev) =>
         prev.map((r) =>
@@ -134,10 +96,8 @@ export const Home = () => {
       );
     });
 
-    // ------------------ Cleanup ------------------
     return () => {
       socket.off("trending_resources_response");
-      socket.off("suggest_groups_response");
       socket.off("suggest_students_response");
       socket.off("like_response");
       socket.off("comment_response");
@@ -189,22 +149,29 @@ export const Home = () => {
     );
   };
 
-  const openGroup = (group) => {
-    navigate(`/groups/${group.id}`, { state: { group } });
-  };
-
   const openProfile = (student) => {
     navigate(`/profile/${student.user_id}`);
   };
 
+  // ------------------ Skeleton Loaders ------------------
+  const ResourceSkeleton = () => (
+    <div className="animate-pulse bg-gray-200 h-64 rounded-lg"></div>
+  );
+
+  const StudentSkeleton = () => (
+    <div className="animate-pulse flex items-center gap-4 bg-gray-200 p-4 rounded-lg h-20"></div>
+  );
+
   // ------------------ UI ------------------
   return (
-    <div className="max-w-5xl mx-auto space-y-10">
+    <div className="max-w-6xl mx-auto space-y-12 p-6">
+      {/* Welcome Banner */}
       {storedUser && (
-        <div className="p-4 bg-gray-100 rounded-lg shadow">
-          <h2 className="text-lg font-semibold text-gray-800">
+        <div className="p-6 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl shadow-md text-white">
+          <h2 className="text-xl font-bold">
             Welcome back, {storedUser.name || "Student"} 👋
           </h2>
+          <p className="text-sm opacity-90">Ready to learn something new today?</p>
         </div>
       )}
 
@@ -213,22 +180,30 @@ export const Home = () => {
         isOpen={showIntro}
         onClose={() => {
           setShowIntro(false);
-          localStorage.setItem("introPlayed", "true"); // mark intro as played
+          localStorage.setItem("introPlayed", "true");
         }}
       />
 
       {/* Trending Resources */}
       <section>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Get Resources</h2>
+        <div className="flex items-center gap-2 mb-4">
+          <BookOpen className="text-indigo-600 w-6 h-6" />
+          <h2 className="text-2xl font-extrabold text-gray-800">Resources for You</h2>
+        </div>
         <div
-          className="overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          className="overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-2 bg-white rounded-xl shadow-inner"
           style={{ maxHeight: resourceMaxHeight }}
         >
-          {trendingResources.length === 0 ? (
-            <p>No resources available.</p>
+          {loadingResources ? (
+            [...Array(3)].map((_, i) => <ResourceSkeleton key={i} />)
+          ) : trendingResources.length === 0 ? (
+            <p className="text-gray-500">No resources available.</p>
           ) : (
-            trendingResources.map((resource, index) => (
-              <div key={resource.id} ref={index === 0 ? resourceCardRef : null}>
+            trendingResources.map((resource) => (
+              <div
+                key={resource.id}
+                className="transform transition hover:scale-105 hover:shadow-lg rounded-lg"
+              >
                 <ResourceCard
                   {...resource}
                   onLike={() => handleLike(resource.id)}
@@ -240,42 +215,26 @@ export const Home = () => {
         </div>
       </section>
 
-      {/* Suggested Groups */}
-      <section>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Suggested Study Groups</h2>
-        <div
-          className="overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-          style={{ maxHeight: groupMaxHeight }}
-        >
-          {suggestedGroups.length === 0 ? (
-            <p>No groups available.</p>
-          ) : (
-            suggestedGroups.map((group, index) => (
-              <div
-                key={group.id}
-                ref={index === 0 ? groupCardRef : null}
-                onClick={() => openGroup(group)}
-                className="cursor-pointer"
-              >
-                <StudyGroupCard {...group} />
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-
       {/* Suggested Students */}
       <section>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Students to Follow</h2>
+        <div className="flex items-center gap-2 mb-4">
+          <Users className="text-blue-600 w-6 h-6" />
+          <h2 className="text-2xl font-extrabold text-gray-800">Students to Follow</h2>
+        </div>
         <div
-          className="overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4"
+          className="overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6 p-2 bg-white rounded-xl shadow-inner"
           style={{ maxHeight: studentMaxHeight }}
         >
-          {suggestedStudents.length === 0 ? (
-            <p>No students available.</p>
+          {loadingStudents ? (
+            [...Array(3)].map((_, i) => <StudentSkeleton key={i} />)
+          ) : suggestedStudents.length === 0 ? (
+            <p className="text-gray-500">No students available.</p>
           ) : (
-            suggestedStudents.map((student, index) => (
-              <div key={student.id} ref={index === 0 ? studentCardRef : null}>
+            suggestedStudents.map((student) => (
+              <div
+                key={student.id}
+                className="transform transition hover:scale-105 hover:shadow-lg rounded-lg"
+              >
                 <UserCard
                   {...student}
                   profilePic={student.profilePic}
