@@ -37,7 +37,7 @@ const PublicChat = () => {
     const container = messagesContainerRef.current;
     if (!container) return;
     const { scrollTop, scrollHeight, clientHeight } = container;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100; // 100px tolerance
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
     if (isNearBottom) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
@@ -73,7 +73,6 @@ const PublicChat = () => {
         const audio = new Audio("/pop.wav");
         audio.play().catch(() => {});
         setUnreadCount((prev) => prev + 1);
-        // Scroll only for new messages from others
         setTimeout(scrollToBottomIfNear, 50);
       } else {
         const audio = new Audio("/sent.wav");
@@ -90,8 +89,7 @@ const PublicChat = () => {
   }, [messages]);
 
   // Send message
-  const handleSendMessage = (e) => {
-    e.preventDefault();
+  const handleSendMessage = () => {
     if (!newMessage.trim()) return;
 
     const msgData = {
@@ -108,8 +106,6 @@ const PublicChat = () => {
 
     setNewMessage("");
     setShowEmojiPicker(false);
-
-    // Scroll to bottom immediately after sending
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   };
 
@@ -138,10 +134,7 @@ const PublicChat = () => {
       </div>
 
       {/* Input & Emoji Picker */}
-      <form
-        className="p-4 border-t bg-white flex items-center space-x-2 relative"
-        onSubmit={handleSendMessage}
-      >
+      <div className="p-4 border-t bg-white flex items-center space-x-2 relative">
         <button
           type="button"
           onClick={() => setShowEmojiPicker((prev) => !prev)}
@@ -150,16 +143,22 @@ const PublicChat = () => {
           <Smile className="h-5 w-5" />
         </button>
 
-        <input
-          type="text"
+        <textarea
           placeholder="Type a message..."
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          className="flex-1 border rounded-full px-4 py-2 focus:outline-none"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault(); // prevent refresh
+              handleSendMessage();
+            }
+          }}
+          className="flex-1 border rounded-full px-4 py-2 focus:outline-none resize-none h-10"
         />
 
         <button
-          type="submit"
+          type="button"
+          onClick={handleSendMessage}
           className="bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600"
         >
           <Send className="h-5 w-5" />
@@ -173,7 +172,7 @@ const PublicChat = () => {
             />
           </div>
         )}
-      </form>
+      </div>
 
       {/* 🔔 Unread badge */}
       {unreadCount > 0 && (
