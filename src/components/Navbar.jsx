@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bell, Search, MessageSquare, User, Menu } from "lucide-react";
 import { io } from "socket.io-client";
 
 // Connect to your Flask-SocketIO backend
-const socket = io("https://studyhub-8req.onrender.com"); // replace with your Render URL
+const socket = io("https://studyhub-8req.onrender.com");
 
 export const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -13,16 +13,33 @@ export const Navbar = () => {
   const [showFollowers, setShowFollowers] = useState(false);
 
   const navigate = useNavigate();
+  const followersRef = useRef(null);
   const loggedInUser = JSON.parse(localStorage.getItem("user"));
   const loggedInUserId = loggedInUser?.user_id;
+
+  // Track clicks outside followers dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        followersRef.current &&
+        !followersRef.current.contains(event.target)
+      ) {
+        setShowFollowers(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Socket.IO: listen for followers
   useEffect(() => {
     if (!loggedInUserId) return;
 
+    console.log("Emitting logged-in user ID to backend:", loggedInUserId);
     socket.emit("listen-followers", loggedInUserId);
 
     socket.on("followers-update", (data) => {
+      console.log("Received followers update from backend:", data);
       setFollowers(data);
     });
 
@@ -66,7 +83,7 @@ export const Navbar = () => {
           {/* Icons */}
           <div className="flex items-center space-x-4">
             {/* Followers / Notifications */}
-            <div className="relative">
+            <div className="relative" ref={followersRef}>
               <button
                 className="p-2 rounded-full text-gray-600 hover:bg-gray-100"
                 onClick={() => setShowFollowers(!showFollowers)}
@@ -91,16 +108,12 @@ export const Navbar = () => {
                         className="flex items-center justify-between p-2 border-b last:border-b-0 hover:bg-gray-100"
                       >
                         <div className="flex items-center space-x-2">
-                          {/* Profile picture */}
                           <img
                             src={f.profile_pic || "/default-avatar.png"}
                             alt="Follower"
                             className="w-8 h-8 rounded-full object-cover"
                           />
-                          {/* Name */}
-                          <span className="font-medium">
-                            {f.name || f.followers_id}
-                          </span>
+                          <span className="font-medium">{f.name || f.followers_id}</span>
                         </div>
                         <span className="text-gray-400 text-xs">
                           {new Date(f.created_at).toLocaleTimeString([], {
@@ -125,9 +138,7 @@ export const Navbar = () => {
 
             {/* Profile */}
             <Link
-              to={
-                loggedInUserId ? `/profile/${loggedInUserId}` : "/profile/me"
-              }
+              to={loggedInUserId ? `/profile/${loggedInUserId}` : "/profile/me"}
               className="p-2 rounded-full text-gray-600 hover:bg-gray-100"
             >
               <div className="h-8 w-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white">
