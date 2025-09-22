@@ -23,6 +23,19 @@ const PublicChat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Format time to Kenya timezone
+  const formatTime = (timestamp) => {
+    if (!timestamp) return "";
+    const date = new Date(timestamp + "Z"); // treat as UTC
+    return new Intl.DateTimeFormat("en-KE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      timeZone: "Africa/Nairobi",
+    }).format(date);
+  };
+
   // Fetch initial messages
   useEffect(() => {
     fetch(`${BACKEND_URL}/api/public-messages`)
@@ -51,12 +64,10 @@ const PublicChat = () => {
       setMessages((prev) => [...prev, msg]);
 
       if (msg.sender_id !== userId) {
-        // New message from other user
         const audio = new Audio("/pop.wav");
         audio.play().catch(() => {});
         setUnreadCount((prev) => prev + 1);
       } else {
-        // Message sent by you
         const audio = new Audio("/sent.wav");
         audio.play().catch(() => {});
       }
@@ -110,9 +121,7 @@ const PublicChat = () => {
           >
             <strong>{msg.sender_id === userId ? "You" : msg.sender_name}:</strong>{" "}
             {msg.message}
-            <div className="text-xs text-right">
-              {new Date(msg.created_at).toLocaleTimeString()}
-            </div>
+            <div className="text-xs text-right">{formatTime(msg.created_at)}</div>
           </div>
         ))}
         <div ref={messagesEndRef} />
