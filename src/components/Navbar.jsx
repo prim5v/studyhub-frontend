@@ -4,7 +4,7 @@ import { Bell, Search, MessageSquare, User, Menu } from "lucide-react";
 import { io } from "socket.io-client";
 
 // Connect to your Flask-SocketIO backend
-const socket = io("https://your-render-app.onrender.com"); // replace with your Render URL
+const socket = io("https://studyhub-8req.onrender.com"); // replace with your Render URL
 
 export const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
