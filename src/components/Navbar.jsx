@@ -100,7 +100,7 @@ export const Navbar = () => {
               <Bell className="h-6 w-6" />
             </button>
             <Link
-              to="/messages"
+              to="/public-chat"
               className="p-2 rounded-full text-gray-600 hover:bg-gray-100"
             >
               <MessageSquare className="h-6 w-6" />
