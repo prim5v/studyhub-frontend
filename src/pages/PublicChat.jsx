@@ -16,12 +16,8 @@ const PublicChat = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const socketRef = useRef(null);
-
-  // Scroll to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
 
   // Format time to Kenya timezone
   const formatTime = (timestamp) => {
@@ -34,6 +30,17 @@ const PublicChat = () => {
       hour12: false,
       timeZone: "Africa/Nairobi",
     }).format(date);
+  };
+
+  // Scroll to bottom if near bottom
+  const scrollToBottomIfNear = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100; // 100px tolerance
+    if (isNearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
   // Fetch initial messages
@@ -59,7 +66,6 @@ const PublicChat = () => {
       socket.emit("join_public_room");
     });
 
-    // Incoming messages
     socket.on("new_public_message", (msg) => {
       setMessages((prev) => [...prev, msg]);
 
@@ -67,18 +73,16 @@ const PublicChat = () => {
         const audio = new Audio("/pop.wav");
         audio.play().catch(() => {});
         setUnreadCount((prev) => prev + 1);
+        // Scroll only for new messages from others
+        setTimeout(scrollToBottomIfNear, 50);
       } else {
         const audio = new Audio("/sent.wav");
         audio.play().catch(() => {});
       }
     });
 
-    return () => {
-      socket.disconnect();
-    };
+    return () => socket.disconnect();
   }, [userId]);
-
-  useEffect(scrollToBottom, [messages]);
 
   // Reset unread count when viewing messages
   useEffect(() => {
@@ -104,12 +108,18 @@ const PublicChat = () => {
 
     setNewMessage("");
     setShowEmojiPicker(false);
+
+    // Scroll to bottom immediately after sending
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   };
 
   return (
     <div className="flex flex-col h-screen w-full max-w-2xl mx-auto bg-gray-100 shadow-lg">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-2"
+      >
         {messages.map((msg, idx) => (
           <div
             key={idx}
