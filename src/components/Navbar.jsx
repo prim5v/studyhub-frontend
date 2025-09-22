@@ -4,26 +4,25 @@ import { Bell, Search, MessageSquare, User, Menu } from "lucide-react";
 import { io } from "socket.io-client";
 
 // Connect to your Flask-SocketIO backend
-const socket = io("https://studyhub-8req.onrender.com");
+const socket = io("https://studyhub-8req.onrender.com", {
+  transports: ["websocket"], // ensures WebSocket transport
+});
 
 export const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [followers, setFollowers] = useState([]);
   const [showFollowers, setShowFollowers] = useState(false);
+  const followersRef = useRef(null);
 
   const navigate = useNavigate();
-  const followersRef = useRef(null);
   const loggedInUser = JSON.parse(localStorage.getItem("user"));
   const loggedInUserId = loggedInUser?.user_id;
 
-  // Track clicks outside followers dropdown
+  // Close followers dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (
-        followersRef.current &&
-        !followersRef.current.contains(event.target)
-      ) {
+      if (followersRef.current && !followersRef.current.contains(event.target)) {
         setShowFollowers(false);
       }
     };
@@ -31,19 +30,24 @@ export const Navbar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Socket.IO: listen for followers
+  // Socket.IO: listen for followers updates
   useEffect(() => {
     if (!loggedInUserId) return;
 
-    console.log("Emitting logged-in user ID to backend:", loggedInUserId);
+    console.log("Connecting to backend for user:", loggedInUserId);
+
+    // Join a room and request initial followers list
     socket.emit("listen-followers", loggedInUserId);
+    console.log("Emitted logged-in user ID to backend:", loggedInUserId);
 
     socket.on("followers-update", (data) => {
       console.log("Received followers update from backend:", data);
       setFollowers(data);
     });
 
-    return () => socket.off("followers-update");
+    return () => {
+      socket.off("followers-update");
+    };
   }, [loggedInUserId]);
 
   const handleSearch = (e) => {
@@ -66,10 +70,7 @@ export const Navbar = () => {
           </Link>
 
           {/* Search */}
-          <form
-            className="hidden md:flex flex-1 mx-8 relative"
-            onSubmit={handleSearch}
-          >
+          <form className="hidden md:flex flex-1 mx-8 relative" onSubmit={handleSearch}>
             <input
               type="text"
               placeholder="Search notes, groups, students..."
@@ -96,7 +97,6 @@ export const Navbar = () => {
                 )}
               </button>
 
-              {/* Followers dropdown */}
               {showFollowers && (
                 <div className="absolute right-0 mt-2 w-80 max-h-80 overflow-y-auto bg-white border border-gray-200 shadow-lg rounded-lg z-50">
                   {followers.length === 0 ? (
@@ -129,10 +129,7 @@ export const Navbar = () => {
             </div>
 
             {/* Chat */}
-            <Link
-              to="/public-chat"
-              className="p-2 rounded-full text-gray-600 hover:bg-gray-100"
-            >
+            <Link to="/public-chat" className="p-2 rounded-full text-gray-600 hover:bg-gray-100">
               <MessageSquare className="h-6 w-6" />
             </Link>
 
