@@ -50,14 +50,14 @@ const PublicChat = () => {
     socket.on("new_public_message", (msg) => {
       setMessages((prev) => [...prev, msg]);
 
-      // If the message is not from logged-in user → play pop + update badge
       if (msg.sender_id !== userId) {
-        const audio = new Audio("/pop.wav"); // notification sound
+        // New message from other user
+        const audio = new Audio("/pop.wav");
         audio.play().catch(() => {});
         setUnreadCount((prev) => prev + 1);
       } else {
-        // Message sent by you → play send sound
-        const audio = new Audio("/sent.wav"); // or another sound
+        // Message sent by you
+        const audio = new Audio("/sent.wav");
         audio.play().catch(() => {});
       }
     });
@@ -69,12 +69,12 @@ const PublicChat = () => {
 
   useEffect(scrollToBottom, [messages]);
 
-  // Reset unread count when user views public chat
+  // Reset unread count when viewing messages
   useEffect(() => {
     setUnreadCount(0);
   }, [messages]);
 
-  // Send a message
+  // Send message
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
@@ -118,8 +118,11 @@ const PublicChat = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input & Emoji */}
-      <div className="p-4 border-t bg-white flex items-center space-x-2 relative">
+      {/* Input & Emoji Picker */}
+      <form
+        className="p-4 border-t bg-white flex items-center space-x-2 relative"
+        onSubmit={handleSendMessage}
+      >
         <button
           type="button"
           onClick={() => setShowEmojiPicker((prev) => !prev)}
@@ -137,8 +140,7 @@ const PublicChat = () => {
         />
 
         <button
-          type="button"
-          onClick={handleSendMessage}
+          type="submit"
           className="bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600"
         >
           <Send className="h-5 w-5" />
@@ -152,7 +154,7 @@ const PublicChat = () => {
             />
           </div>
         )}
-      </div>
+      </form>
 
       {/* 🔔 Unread badge */}
       {unreadCount > 0 && (
