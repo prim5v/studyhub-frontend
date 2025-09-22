@@ -12,9 +12,7 @@ export const Upload = () => {
 
   const [resourceType, setResourceType] = useState("documents");
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [subject, setSubject] = useState("");
-  const [course, setCourse] = useState("");
+  const [unit, setUnit] = useState(""); // Unit is now required
   const [file, setFile] = useState(null);
 
   const [loading, setLoading] = useState(false);
@@ -32,7 +30,6 @@ export const Upload = () => {
 
   useEffect(() => {
     socket.on("upload_response", (data) => {
-      console.log("Received upload response:", data);
       setLoading(false);
       setProgress(0);
       if (data.success) {
@@ -47,7 +44,6 @@ export const Upload = () => {
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-    console.log("File selected:", selectedFile);
     setFile(selectedFile);
   };
 
@@ -62,23 +58,24 @@ export const Upload = () => {
       alert("Please select a file to upload");
       return;
     }
+    if (!unit.trim()) {
+      alert("Unit is required");
+      return;
+    }
     if (file.size > 50 * 1024 * 1024) {
       alert("File is too large!");
       return;
     }
 
-    console.log("Starting upload for file:", file.name);
     setLoading(true);
     setMessage(null);
     setProgress(0);
 
     try {
-      // 1. Get Cloudinary signature from backend
       const sigRes = await fetch("https://studyhub-8req.onrender.com/get-signature");
       const { signature, timestamp, cloud_name, api_key, error } = await sigRes.json();
       if (error) throw new Error(error);
 
-      // 2. Upload file directly to Cloudinary
       const formData = new FormData();
       formData.append("file", file);
       formData.append("api_key", api_key);
@@ -87,41 +84,28 @@ export const Upload = () => {
 
       const uploadRes = await fetch(
         `https://api.cloudinary.com/v1_1/${cloud_name}/auto/upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
+        { method: "POST", body: formData }
       );
-
       const uploadData = await uploadRes.json();
       if (!uploadData.secure_url) throw new Error("Cloudinary upload failed");
 
-      console.log("✅ Uploaded to Cloudinary:", uploadData.secure_url);
-
-      // 3. Send metadata + URL to backend via socket
       socket.emit("upload_resource", {
         sender_id: userId,
         title,
-        description,
-        subject,
-        course,
         resource_type: resourceType,
         resource_url: uploadData.secure_url,
         group_id: groupId,
         is_group: groupId ? 1 : 0,
+        course: unit, // send unit
       });
 
-      // Fake progress bar while waiting for server confirm
       let fakeProgress = 0;
       const interval = setInterval(() => {
         fakeProgress += 10;
-        if (fakeProgress >= 90) {
-          clearInterval(interval);
-        }
+        if (fakeProgress >= 90) clearInterval(interval);
         setProgress(fakeProgress);
       }, 200);
     } catch (err) {
-      console.error("❌ Upload error:", err);
       setLoading(false);
       setMessage({ type: "error", text: `Upload failed: ${err.message}` });
     }
@@ -142,6 +126,7 @@ export const Upload = () => {
             <span className="mt-2 text-gray-700">{progress}%</span>
           </div>
         )}
+
         <div className="p-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-6">
             {groupId ? "Upload Group Resource" : "Upload Resource"}
@@ -207,9 +192,7 @@ export const Upload = () => {
 
             {/* Title */}
             <div className="mb-6">
-              <label className="block text-gray-700 font-medium mb-2">
-                Title
-              </label>
+              <label className="block text-gray-700 font-medium mb-2">Title</label>
               <input
                 type="text"
                 value={title}
@@ -219,52 +202,16 @@ export const Upload = () => {
               />
             </div>
 
-            {/* Description */}
+            {/* Unit */}
             <div className="mb-6">
-              <label className="block text-gray-700 font-medium mb-2">
-                Description
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 h-24"
+              <label className="block text-gray-700 font-medium mb-2">Unit</label>
+              <input
+                type="text"
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                required
               />
-            </div>
-
-            {/* Subject & Course */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div>
-                <label className="block text-gray-700 font-medium mb-2">
-                  Subject
-                </label>
-                <select
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                  required
-                >
-                  <option value="">Select a subject</option>
-                  <option value="mathematics">Mathematics</option>
-                  <option value="computerScience">Computer Science</option>
-                  <option value="physics">Physics</option>
-                  <option value="chemistry">Chemistry</option>
-                  <option value="biology">Biology</option>
-                  <option value="literature">Literature</option>
-                  <option value="history">History</option>
-                  <option value="economics">Economics</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-gray-700 font-medium mb-2">
-                  Course (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={course}
-                  onChange={(e) => setCourse(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                />
-              </div>
             </div>
 
             {/* File Upload */}

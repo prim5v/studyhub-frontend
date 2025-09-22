@@ -184,7 +184,7 @@ export const ResourcePage = () => {
       {/* LEFT SIDE - Details + Comments */}
       <div className="flex-1">
         <h1 className="text-4xl font-bold mb-4">{resource.title}</h1>
-        <p className="text-lg text-gray-700 mb-2">Course: {resource.subject}</p>
+        <p className="text-lg text-gray-700 mb-2">Unit: {resource.subject}</p>
         <p className="text-lg text-gray-700 mb-2">
           Uploaded by: {resource.uploadedBy?.name || "Unknown"}
         </p>
