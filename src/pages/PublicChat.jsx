@@ -19,6 +19,7 @@ const PublicChat = () => {
 
   // Scroll to bottom when messages update
   const scrollToBottom = () => {
+    console.log("🔽 Scrolling to bottom...");
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
@@ -36,6 +37,7 @@ const PublicChat = () => {
 
   // Setup socket connection + listeners
   useEffect(() => {
+    console.log("🔌 Connecting socket...");
     const socket = io(BACKEND_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
@@ -45,7 +47,7 @@ const PublicChat = () => {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      console.log("🔌 Connected with id:", socket.id);
+      console.log("✅ Connected with id:", socket.id);
       socket.emit("join_public_room");
       console.log("🚪 Joined PUBLIC room");
     });
@@ -56,7 +58,7 @@ const PublicChat = () => {
 
     socket.on("reconnect", (attempt) => {
       console.log(`🔄 Reconnected after ${attempt} attempts`);
-      socket.emit("join_public_room"); // 👈 rejoin on reconnect
+      socket.emit("join_public_room");
     });
 
     socket.on("connect_error", (err) => {
@@ -64,32 +66,20 @@ const PublicChat = () => {
     });
 
     socket.on("new_public_message", (msg) => {
-      console.log("📩 Received:", msg);
+      console.log("📩 Received message from backend:", msg);
 
-      // ✅ Avoid duplicate (ignore if we already optimistically added this msg)
-      setMessages((prev) => {
-        const isDuplicate = prev.some(
-          (m) =>
-            m.sender_id === msg.sender_id &&
-            m.message === msg.message &&
-            Math.abs(new Date(m.created_at) - new Date(msg.created_at)) < 2000 // within 2s
-        );
-        if (isDuplicate) {
-          console.log("⚠️ Ignored duplicate message:", msg);
-          return prev;
-        }
-        return [...prev, msg];
-      });
+      setMessages((prev) => [...prev, msg]);
     });
 
     return () => {
+      console.log("🛑 Disconnecting socket...");
       socket.disconnect();
     };
   }, []);
 
   useEffect(scrollToBottom, [messages]);
 
-  // Send a message
+  // Send a message (no optimistic render)
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (!newMessage.trim()) {
@@ -104,16 +94,12 @@ const PublicChat = () => {
       created_at: new Date().toISOString(),
     };
 
-    console.log("📤 Sending:", msgData);
+    console.log("📤 Sending message to backend:", msgData);
 
-    // Emit to backend
     socketRef.current.emit("send_public_message", {
       sender_id: userId,
       message: msgData.message,
     });
-
-    // ✅ Optimistic render
-    setMessages((prev) => [...prev, msgData]);
 
     setNewMessage("");
     setShowEmojiPicker(false);
@@ -146,7 +132,10 @@ const PublicChat = () => {
       <div className="p-4 border-t bg-white flex items-center space-x-2 relative">
         <button
           type="button"
-          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          onClick={() => {
+            console.log("😀 Emoji picker toggled:", !showEmojiPicker);
+            setShowEmojiPicker(!showEmojiPicker);
+          }}
           className="p-2 rounded-full hover:bg-gray-200"
         >
           <Smile className="h-5 w-5" />
@@ -156,7 +145,10 @@ const PublicChat = () => {
           type="text"
           placeholder="Type a message..."
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={(e) => {
+            console.log("⌨️ Typing message:", e.target.value);
+            setNewMessage(e.target.value);
+          }}
           className="flex-1 border rounded-full px-4 py-2 focus:outline-none"
         />
 
@@ -173,6 +165,7 @@ const PublicChat = () => {
             <Picker
               data={data}
               onEmojiSelect={(emoji) => {
+                console.log("🎉 Emoji selected:", emoji.native);
                 setNewMessage((prev) => prev + emoji.native);
               }}
             />
